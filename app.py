@@ -4,6 +4,7 @@ Ejecutar con:  streamlit run app.py
 """
 import base64
 import io
+import os
 import re
 
 import matplotlib
@@ -49,9 +50,25 @@ def to_model_input(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data
+def load_training_data():
+    """Carga el CSV local; usa un respaldo público si el fichero no está empaquetado."""
+    local_path = "data/train.csv"
+    if os.path.exists(local_path):
+        return pd.read_csv(local_path)
+
+    backup_url = "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"
+    try:
+        return pd.read_csv(backup_url)
+    except Exception as exc:
+        raise RuntimeError(
+            "No se encontró data/train.csv y tampoco pudo descargarse el dataset de respaldo."
+        ) from exc
+
+
+@st.cache_data
 def fare_reference():
     """Cuartiles de la tarifa por clase (para dar contexto al slider)."""
-    train = pd.read_csv("data/train.csv")
+    train = load_training_data()
     return train.groupby("Pclass")["Fare"].quantile([0.25, 0.5, 0.75]).unstack().to_dict("index")
 
 
@@ -60,7 +77,7 @@ GBP_1912_TO_TODAY = 130  # aprox.: 1 £ de 1912 ≈ 130 £ actuales (inflación 
 
 @st.cache_resource
 def train_model():
-    train = pd.read_csv("data/train.csv")
+    train = load_training_data()
     train_fe = feature_engineering(train)
     X = to_model_input(train_fe)
     y = train_fe["Survived"]
